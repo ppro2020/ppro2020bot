@@ -4,7 +4,7 @@ const { Client, Events, Collection, GatewayIntentBits, ActivityType, PresenceUpd
 const { token } = require('./config.json')
 
 // new client instance
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
 
 client.commands = new Collection();
 
@@ -18,22 +18,41 @@ for ( const folder of commandFolders) {
         const filePath = path.join((commandsPath), file);
         const command = require(filePath);
 
-        if ('data' in command && 'execute' in command) {
-            client.commands.set(command.data.name, command);
-        } else {
-            console.log(`[WARNING ] The command at ${filePath} is missing a required "data" or "execute" property`);
+        const commandList = Array.isArray(command.commands) ? command.commands : [command];
+        for (const commandItem of commandList) {
+            if ('data' in commandItem && 'execute' in commandItem) {
+                client.commands.set(commandItem.data.name, commandItem);
+            } else {
+                console.log(`[WARNING ] The command at ${filePath} is missing a required "data" or "execute" property`);
+            }
         }
     }
 }
 
 client.on(Events.InteractionCreate, async interaction => {
+    if (interaction.isAutocomplete()) {
+        const command = interaction.client.commands.get(interaction.commandName);
+        if (!command?.autocomplete) {
+            await interaction.respond([]);
+            return;
+        }
+
+        try {
+            await command.autocomplete(interaction);
+        } catch (error) {
+            console.error(error);
+            await interaction.respond([]);
+        }
+        return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
     
     const command = interaction.client.commands.get(interaction.commandName);
 
         if (!command) {
         console.error(`No command matching ${interaction.commandName} was found `);
-        retrun;
+        return;
     }
 
     try {
